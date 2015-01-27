@@ -1,3 +1,5 @@
+boolean USE_COLOR = true;
+
 PVector[] circles = new PVector[40];
 float radiusMult = 70;
 float lerpRate = 0.1;
@@ -43,6 +45,20 @@ void draw() {
     }
     else
     {
+      if (mousePressed == true)
+      {        
+        if (USE_COLOR && i % 2 == 1)
+        {
+           circles[i].z = int(random(128, 255));
+        }
+      }
+      else
+      {
+        if (i % 2 == 1)
+        {
+           circles[i].z = 255;
+        }
+      }
       float xDiff = circles[0].x - (width / 2);
       circles[i].x = (width / 2) + map(xDiff, -width / 2, width / 2, -1, 1) * (circles.length - i) * radiusMult / (width * 0.002);  //(radius / 2)
       
@@ -59,4 +75,5 @@ void draw() {
   }
   
 }
+
 
