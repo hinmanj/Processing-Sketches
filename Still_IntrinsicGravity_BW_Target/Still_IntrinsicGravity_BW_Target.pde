@@ -1,9 +1,14 @@
-boolean USE_COLOR = true;
+import ddf.minim.*;
+import ddf.minim.analysis.*;
+
+
+boolean USE_COLOR = false;
 boolean INVERT_MOVEMENT = false;
 
 double nextInvertTimeMillis = 8000; //first at 8 seconds
 
-PVector[] circles = new PVector[40];
+int S_NUM_CIRCLES = 40;
+PVector[] circles = new PVector[S_NUM_CIRCLES];
 float radiusMult = 70;
 float lerpRate = 0.075;
 float radiusLerpRate = 0.005; //smaller for faster movements
@@ -11,12 +16,17 @@ float radiusLerpRate = 0.005; //smaller for faster movements
 float cosMult = 1.0;
 float sinMult = 1.0;
 
-void setup() {
-  size(1680, 1050);
+Minim mMinim;
+AudioInput mLineIn;
+FFT mFFT;
+
+void setup()
+{
+  size(1680, 1050,P3D);
   background(255);
   noStroke();
   fill(0);
-  
+  setupAudio();
   for (int i = 0; i < circles.length; i++)
   {
     float fillColor = 0;
@@ -26,9 +36,25 @@ void setup() {
     }
     circles[i] = new PVector((float)width / 2, (float)height / 2, fillColor);
   }
+  
 }
 
-void draw() {
+void setupAudio()
+{
+  mMinim=new Minim(this);
+  mLineIn = mMinim.getLineIn();
+  mFFT = new FFT(mLineIn.bufferSize(),mLineIn.sampleRate());
+  mFFT.linAverages(S_NUM_CIRCLES);
+}
+
+void draw()
+{
+  background(255);
+
+  mFFT.forward(mLineIn.mix);
+  PVector cFFTVals = getMinMaxFFT();
+  float cMapped = map(cFFTVals.z, cFFTVals.x, cFFTVals.y,1,10);
+  USE_COLOR = mousePressed;
   if ( (keyPressed && key == 'z') || nextInvertTimeMillis < millis())
   {
      INVERT_MOVEMENT = !INVERT_MOVEMENT; 
@@ -44,32 +70,33 @@ void draw() {
   
   for (int i = 0; i < circles.length; i++)
   {
-    float radius = (i + 1) * radiusMult;
+    float radius = (i + 1) * radiusMult * mFFT.getAvg(i);
     
     if (i == 0) //smallest circle
     {
-      if (mousePressed == true)
+      //if (mousePressed == true)
+      if (USE_COLOR == true)
       {
         desiredX = mouseX;
         desiredY = mouseY;
       }
-      
       
       circles[i].x += (desiredX - circles[i].x) * lerpRate;
       circles[i].y += (desiredY - circles[i].y) * lerpRate;
     }
     else
     {
-      if (mousePressed == true)
+      if (USE_COLOR == true)
       {        
-        if (USE_COLOR && i % 2 == 0)
+        if (/*USE_COLOR && */i % 2 == 1)
         {
            circles[i].z = int(random(128, 255));
         }
       }
+      
       else
       {
-        if (i % 2 == 0)
+        if (i % 2 == 1)
         {
            circles[i].z = 255;
         }
@@ -90,18 +117,62 @@ void draw() {
         circles[i].y += (((height / 2) + map(yDiff, -height / 2, height / 2, -1, 1) * (circles.length - i) * radiusMult / (height * 0.0052) - circles[i].y) * lerpRate); //(radius / 2)
       }
     }
+    circles[i].x = constrain(circles[i].x,0,width);
+    circles[i].y = constrain(circles[i].y,0,height);
   }
     
-  for (int i = circles.length - 1; i >= 0; i--)
-  {
-    float radius = (i) * radiusMult;    
-    fill(circles[i].z);
-    if (!(i == 0 && INVERT_MOVEMENT))
+    for (int i = circles.length - 1; i >= 0; i--)
+    {
+      float cFFTV = mFFT.getAvg(i);
+      float cM = map(cFFTV, cFFTVals.x, cFFTVals.y,0.99,1.01);
+      constrain(cM,0.99,1.01);      
+      if(USE_COLOR)
+      {
+        cM = map(cFFTV, cFFTVals.x, cFFTVals.y,0.5,1.5);
+        constrain(cM,0.5,1.5);
+      }      
+      
+      float cB = map(cFFTV, cFFTVals.x, cFFTVals.y,128,255);
+       constrain(cB,128,255);
+
+      float radius = (i) * radiusMult;// * cFFTV;
+      
+      if (USE_COLOR && i % 2 == 1)
+      {
+          fill(0, cB, circles[i].z);
+      }
+      else if (i % 2 == 1)
+      {
+           fill(0);
+      }
+       else
+      {
+          fill(circles[i].z);
+          //fill(cB);
+          radius= min(radius, radius*cM);          
+      } 
+   
+      if (!(i == 0 && INVERT_MOVEMENT))
       {
         ellipse(circles[i].x, circles[i].y, radius, radius);
       }
-  }
-  
+   }
 }
 
-
+PVector getMinMaxFFT()
+{
+  float cMin = 1000;
+  float cMax = -1;
+  float cVal = 0;
+  for (int i = 0; i < mFFT.avgSize (); i++)
+  {
+    float cr = mFFT.getAvg(i);
+    if (cr<cMin)
+      cMin=cr;
+    else if (cr>=cMax)
+      cMax=cr;
+    cVal+=cr;
+  }
+  cVal/=mFFT.avgSize();
+  return new PVector(cMin, cMax, cVal);
+}
